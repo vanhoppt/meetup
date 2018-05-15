@@ -35,6 +35,12 @@ export default new Vuex.Store({
     createMeetup (state, payload) {
       state.loadedMeetups.push(payload)
     },
+    updateMeetupData (state, payload) {
+      let meetup = state.loadedMeetups.find(meetup => meetup.id === payload.id)
+      if (payload.title) meetup.title = payload.title
+      if (payload.description) meetup.description = payload.description
+      if (payload.date) meetup.date = payload.date
+    },
     setUser (state, payload) {
       state.user = payload
     },
@@ -63,7 +69,8 @@ export default new Vuex.Store({
                 description: obj[key].description,
                 imageUrl: obj[key].imageUrl,
                 location: obj[key].location,
-                date: obj[key].date
+                date: obj[key].date,
+                creatorId: obj[key].creatorId
               })
             }
             commit('setLoadedMeetups', meetups)
@@ -77,26 +84,68 @@ export default new Vuex.Store({
           }
         )
     },
-    createMeetup ({commit}, payload) {
+    createMeetup ({commit, getters}, payload) {
       // eslint-disable-next-line
       const meetup = {  
         title: payload.title,
         location: payload.location,
-        imageUrl: payload.imageUrl,
         description: payload.description,
-        date: payload.date.toISOString()
+        date: payload.date.toISOString(),
+        creatorId: getters.user.id
       }
+      let imageUrl
+      let key
       firebase.database().ref('meetups').push(meetup)
         .then((response) => {
-          const key = response.key  // eslint-disable-line
+          key = response.key  // eslint-disable-line
+          return key
+        })
+        .then(key => {
+          const filename = payload.image.name
+          const ext = filename.slice(filename.lastIndexOf('.'))
+          let ref = firebase.storage().ref().child('meetups')
+          let file = `${key}.${ext}`
+          return ref.child(file).put(payload.image)
+        })
+        .then(snapshot => {
+          let filename = snapshot.metadata.name
+          let ref = firebase.storage().ref().child('meetups')
+          return ref.child(filename).getDownloadURL()
+        })
+        .then(fileURL => {
+          imageUrl = fileURL
+          return firebase.database().ref('meetups').child(key).update({imageUrl: imageUrl})
+        })
+        .then(() => {
           commit('createMeetup', {
             ...meetup,
+            imageUrl: imageUrl,
             id: key
           })
-        }
-        )
+        })
         .catch(error => console.log(error))
-      commit('createMeetup', meetup)
+    },
+    updateMeetupData ({commit}, payload) {
+      commit('setLoading', true)
+      const updateObj = {}
+      if (payload.title) {
+        updateObj.title = payload.title
+      }
+      if (payload.description) {
+        updateObj.description = payload.description
+      }
+      if (payload.date) {
+        updateObj.date = payload.date
+      }
+      firebase.database().ref('meetups').child(payload.id).update(updateObj)
+        .then(() => {
+          commit('setLoading', false)
+          commit('updateMeetupData', payload)
+        })
+        .catch(error => {
+          console.log(error)
+          commit('setLoading', false)
+        })
     },
     signUserUp ({commit}, payload) {
       commit('setLoading', true)
@@ -140,6 +189,13 @@ export default new Vuex.Store({
             console.log(error)
           }
         )
+    },
+    autoSignin ({commit}, payload) {
+      commit('setUser', {id: payload.uid, registeredMeetups: []})
+    },
+    logout ({commit}) {
+      firebase.auth().signOut()
+      commit('setUser', null)
     },
     clearError ({commit}) {
       commit('clearError')

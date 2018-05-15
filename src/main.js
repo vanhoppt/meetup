@@ -5,7 +5,7 @@ import router from './router'
 import store from './store/index'
 import DateFilter from './filters/date'
 import Alert from './components/Common/Alert'
-
+import EditMeetupDetailsDialog from './components/Meetup/Edit/EditMeetupDetailsDialog'
 import Vuetify from 'vuetify'
 
 Vue.use(Vuetify, {theme: {
@@ -20,6 +20,7 @@ Vue.use(Vuetify, {theme: {
 
 Vue.filter('date', DateFilter)
 Vue.component('app-alert', Alert)
+Vue.component('app-edit-meetup-details-dialog', EditMeetupDetailsDialog)
 
 Vue.config.productionTip = false
 
@@ -37,6 +38,11 @@ new Vue({
       projectId: 'rum-meetup',
       storageBucket: 'rum-meetup.appspot.com',
       messagingSenderId: '869803187885'
+    })
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) {
+        this.$store.dispatch('autoSignin', user)
+      }
     })
     this.$store.dispatch('loadMeetups')
   }
